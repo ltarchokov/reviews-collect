@@ -2,10 +2,10 @@
 """
 Единая точка входа: сбор отзывов с любой подключённой площадки.
 
-    python3 collect.py wb "гиславед" --explore
-    python3 collect.py wb "гиславед" --brand Gislaved --subject "Шины зимние"
-    python3 collect.py wb "jacobs" --stars 1-3 --period 2025-01..2025-08
-    python3 collect.py wb --nm 119396077 148815731 --media photo
+    python3 collect.py wb "<запрос>" --explore
+    python3 collect.py wb "<запрос>" --brand "<бренд>" --subject "<категория>"
+    python3 collect.py wb "<запрос>" --stars 1-3 --period 2025-01..2025-08
+    python3 collect.py wb --nm <артикул> <артикул> --media photo
 
 Площадка задаёт свои аргументы (что искать), фильтры общие для всех
 (что оставить из собранного). Результат — в out/<площадка>/<запрос>/
