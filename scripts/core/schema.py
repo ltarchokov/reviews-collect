@@ -205,10 +205,20 @@ def dedup(rows: list[dict]) -> tuple[list[dict], int]:
     Ключ — автор, дата, оценка и начала текстов. Схлопнуть два разных
     отзыва он может только если один автор в один день поставил ту же
     оценку и написал то же самое; такой случай нам и не нужен.
+
+    Второй ключ — сам `review_id`, когда он есть: один и тот же id с
+    разными полями всё равно один отзыв. На WB такое бывает, когда
+    площадка показывает отзыв на нескольких объединённых карточках.
     """
     seen: set = set()
+    seen_ids: set = set()
     out: list[dict] = []
     for r in rows:
+        rid = (r.get("platform"), r.get("review_id"))
+        if r.get("review_id"):
+            if rid in seen_ids:
+                continue
+            seen_ids.add(rid)
         key = (
             r.get("platform"),
             r.get("author_hash"),

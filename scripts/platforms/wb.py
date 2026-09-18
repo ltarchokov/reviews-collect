@@ -150,6 +150,7 @@ def add_args(ap) -> None:
     ap.add_argument("--pages", type=int, default=1, help="страниц выдачи по 100 товаров (по умолчанию 1)")
     ap.add_argument("--brand", help="оставить только этот бренд: точное совпадение, если оно есть в выдаче, иначе по вхождению")
     ap.add_argument("--name", help="оставить карточки, в названии которых есть это слово: сезон, модель, объём («летн», «Powergy»)")
+    ap.add_argument("--all-subjects", action="store_true", help="собрать несколько категорий вместе (по умолчанию инструмент отказывается)")
     ap.add_argument("--min-feedbacks", type=int, default=1, help="пропускать карточки с числом отзывов меньше указанного")
 
 
@@ -511,6 +512,28 @@ def collect(args) -> tuple[list[dict], list[dict], list[str]]:
             unique.append(p)
     products = [p for p in unique if p["reviews_declared"] >= args.min_feedbacks]
     products.sort(key=lambda p: -p["reviews_declared"])
+
+    # Единица сбора — одна категория. Запрос «брюки INICIO» без --subject
+    # приносит и брюки, и платья, и костюмы того же бренда; смешанный
+    # датасет не отвечает ни на один вопрос. Поэтому несколько категорий
+    # без явного выбора не собираются: печатаем, что есть, и выходим.
+    if not args.nm and not getattr(args, "subject", None) and not getattr(args, "all_subjects", False):
+        names = subjects(wb.c)
+        by_subj = Counter(
+            names.get(int(p.get("_subject_id") or 0), f"предмет {p.get('_subject_id')}")
+            for p in products
+        )
+        if len(by_subj) > 1:
+            have = ", ".join(f"{k} ({v})" for k, v in by_subj.most_common(12))
+            note = (
+                f"В выборке {len(by_subj)} категорий: {have}. Сбор идёт по одной "
+                "категории за прогон — выбери её с пользователем и передай "
+                "--subject «название». Собрать всё вместе: --all-subjects, "
+                "но датасет будет смешанным."
+            )
+            log(note)
+            return [], [], [note]
+
     products = products[: args.products]
 
     log(f"карточек к обработке: {len(products)}")
