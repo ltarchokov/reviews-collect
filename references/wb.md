@@ -5,10 +5,10 @@
 ## Запуск
 
 ```bash
-.venv/bin/python collect.py wb "кофе jacobs"
-.venv/bin/python collect.py wb "jacobs" --brand jacobs --products 40 --pages 2
-.venv/bin/python collect.py wb --nm 119396077 148815731
-.venv/bin/python collect.py wb "сыворотка витамин с" --stars 1-3 --media photo
+collect wb "кофе jacobs"
+collect wb "jacobs" --brand jacobs --products 40 --pages 2
+collect wb --nm 119396077 148815731
+collect wb "сыворотка витамин с" --stars 1-3 --media photo
 ```
 
 Скорость: около 5 секунд на карточку, то есть ~1000 отзывов.
@@ -75,7 +75,7 @@ WB отдаёт максимум ~1000 последних отзывов на к
 
 Симптом: `не пробились к выдаче ни одним путём` на повторных запусках.
 Значит WB сменил пути поиска. Лечится дописыванием нового пути
-в `SEARCH_PATHS` в начале `platforms/wb.py`; подсмотреть актуальный —
+в `SEARCH_PATHS` в начале `scripts/platforms/wb.py`; подсмотреть актуальный —
 в DevTools на wildberries.ru, вкладка Network, фильтр `search`.
 
 Эндпоинты отзывов (`feedbacks1/2.wb.ru`) и карточек (`card.wb.ru`)

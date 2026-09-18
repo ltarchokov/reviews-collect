@@ -15,9 +15,9 @@
 ## Запуск
 
 ```bash
-.venv/bin/python collect.py irecommend "cerave" --products 5
-.venv/bin/python collect.py irecommend --term 484149 --max-reviews 200
-.venv/bin/python collect.py irecommend "cerave" --contains "аллергия,до и после"
+collect irecommend "cerave" --products 5
+collect irecommend --term 484149 --max-reviews 200
+collect irecommend "cerave" --contains "аллергия,до и после"
 ```
 
 ## Медленно по устройству, а не по осторожности

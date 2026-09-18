@@ -7,9 +7,9 @@
 ## Запуск
 
 ```bash
-.venv/bin/python collect.py uteka "ацц" --products 6
-.venv/bin/python collect.py uteka --url https://uteka.ru/product/acc-long-1229/
-.venv/bin/python collect.py uteka "витамин д" --stars 1-3 --period 2024-01..2026-08
+collect uteka "ацц" --products 6
+collect uteka --url https://uteka.ru/product/acc-long-1229/
+collect uteka "витамин д" --stars 1-3 --period 2024-01..2026-08
 ```
 
 Скорость: примерно 3–5 секунд на товар. Ходит медленнее маркетплейсов
