@@ -487,28 +487,40 @@ def collect(args) -> tuple[list[dict], list[dict], list[str]]:
         reviews.extend(rows)
         p["reviews_collected"] = len(rows)
         # Число с карточки отзывов точнее, чем из выдачи поиска.
+        # feedbackCount — все оценки, включая поставленные без слов;
+        # API отдаёт только отзывы с содержимым (текст, фото), и их
+        # число площадка называет отдельно — feedbackCountWithText.
+        # Сравнивать собранное надо с ним: «418 из 1502» выглядит как
+        # потеря 72%, а на деле взято всё, что вообще можно прочитать.
         p["reviews_declared"] = data.get("feedbackCount") or p["reviews_declared"]
+        with_text = int(data.get("feedbackCountWithText") or 0)
         p["rating"] = data.get("valuation") or p["rating"]
         # Распределение оценок по всей карточке. Нужно, чтобы посчитать,
-        # насколько отданная нам тысяча смещена относительно целого:
+        # насколько отданный срез смещён относительно целого:
         # замерено, что негатив в срезе представлен втрое сильнее.
+        extra = {}
         dist = data.get("valuationDistribution") or {}
         if dist:
-            p["extra"] = json.dumps(
-                {"valuation_distribution": dist}, ensure_ascii=False
-            )
+            extra["valuation_distribution"] = dist
+        if with_text:
+            extra["feedback_count_with_text"] = with_text
+        if extra:
+            p["extra"] = json.dumps(extra, ensure_ascii=False)
 
         log(
             f"[{i}/{len(products)}] {p['brand']} · {p['product_name'][:40]} "
             f"— {len(rows)} из {p['reviews_declared']}"
+            + (f" (с текстом {with_text})" if with_text else "")
         )
         wb.c.sleep()
 
     log(wb.c.stats())
     notes = [
-        "WB отдаёт максимум ~1000 последних отзывов на карточку. Объём набирается "
-        "числом карточек (`--products`), а не глубиной по одной. Выборка смещена "
-        "к свежим отзывам — динамику за длинный период по ней строить нельзя.",
+        "WB отдаёт только отзывы с текстом или фото, не больше ~1000 последних "
+        "на карточку; оценки без слов в выгрузку не входят, но учтены в таблице "
+        "смещения. Объём набирается числом карточек (`--products`), а не глубиной "
+        "по одной. Выборка смещена к свежим отзывам — динамику за длинный период "
+        "по ней строить нельзя.",
         f"Сеть: {wb.c.stats()}. Высокая доля отбитых запросов — норма для "
         "поиска WB, он вероятностно сбрасывает нагрузку.",
     ]

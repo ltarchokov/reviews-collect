@@ -35,6 +35,19 @@ def _declared_dist(products: list[dict]) -> Counter:
                 total[int(k)] += int(v)
     return total
 
+
+def _declared_with_text(products: list[dict]) -> int:
+    """Сколько отзывов с текстом площадка называет на этих карточках.
+    Только это число и можно взять; остальное — оценки без слов."""
+    n = 0
+    for p in products:
+        try:
+            extra = json.loads(p.get("extra") or "{}")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        n += int(extra.get("feedback_count_with_text") or 0)
+    return n
+
 # Грубая первичная тематизация негатива по ключевым словам.
 # Это первый срез, а не классификатор: одно и то же слово в разных
 # категориях значит разное («протекает» — брак у бытовой техники и
@@ -165,16 +178,28 @@ def build(
     # Покрытие: сколько отзывов есть на площадке против того, сколько
     # удалось взять. Замер потолка, критерий приёмки №5.
     declared = sum(int(p.get("reviews_declared") or 0) for p in products)
+    with_text = _declared_with_text(products)
     if declared:
         d.li(
             f"Заявлено площадкой на этих карточках: **{declared}** "
             f"(взято {collected / declared * 100:.0f}%)"
         )
-        if collected < declared * 0.9:
+        if with_text:
+            # Читаемые отзывы — отдельная база: оценки без слов площадка
+            # не отдаёт никому, сравнивать с ними собранное бессмысленно.
             d.li(
-                f"⚠️ Площадка отдала {collected} из {declared}: часть отзывов "
-                "она не показывает. Доли по собранному срезу считать можно "
-                "только с оговоркой — см. раздел о смещении ниже."
+                f"Из них с текстом или фото: **{with_text}** — взято "
+                f"{min(collected / with_text * 100, 100):.0f}%. Остальные "
+                f"{declared - with_text} — оценки без слов; их нет в выгрузке, "
+                "но они учтены в таблице смещения ниже."
+            )
+        base_for_gap = with_text or declared
+        if collected < base_for_gap * 0.9:
+            d.li(
+                f"⚠️ Площадка отдала {collected} из {base_for_gap} читаемых: "
+                "часть отзывов она не показывает (потолок около тысячи на "
+                "карточку). Доли по собранному срезу считать можно только "
+                "с оговоркой — см. раздел о смещении ниже."
             )
 
     if filter_report:
