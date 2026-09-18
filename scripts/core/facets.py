@@ -100,7 +100,9 @@ def render(f: Facets, limit: int = 12) -> str:
         w = min(max(w, 12), 46)
         L.append(f"  {'значение'.ljust(w)}  карточек   отзывов")
         for name, cards, reviews in vals:
-            L.append(f"  {name[:w].ljust(w)}  {cards:>8}  {reviews:>9}")
+            # Разделители тысяч: агент копирует цифры в варианты ответа
+            # как напечатано, «91 761» читается, «91761» — нет.
+            L.append(f"  {name[:w].ljust(w)}  {cards:>8}  {reviews:>9,}".replace(",", " "))
         if len(facet.values) > limit:
             hidden = len(facet.values) - limit
             L.append(f"  … и ещё {hidden}")

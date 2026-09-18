@@ -534,9 +534,10 @@ def collect(args) -> tuple[list[dict], list[dict], list[str]]:
             log(note)
             return [], [], [note]
 
+    available = len(products)
     products = products[: args.products]
 
-    log(f"карточек к обработке: {len(products)}")
+    log(f"карточек к обработке: {len(products)} из {available} подходящих")
     if not products:
         # Пустой результат после сужения почти всегда значит, что выбранная
         # пара «бренд + категория» в этой выдаче не существует. Молчаливый
@@ -607,6 +608,8 @@ def collect(args) -> tuple[list[dict], list[dict], list[str]]:
 
     log(wb.c.stats())
     notes = [
+        f"Под сужение подходило {available} карточек, взято {len(products)} "
+        f"самых отзывных (`--products`). Остальные в датасет не вошли.",
         "WB отдаёт только отзывы с текстом или фото, не больше ~1000 последних "
         "на карточку; оценки без слов в выгрузку не входят, но учтены в таблице "
         "смещения. Объём набирается числом карточек (`--products`), а не глубиной "
