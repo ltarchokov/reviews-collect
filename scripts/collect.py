@@ -2,10 +2,10 @@
 """
 Единая точка входа: сбор отзывов с любой подключённой площадки.
 
-    python3 collect.py wb "кофе jacobs"
+    python3 collect.py wb "гиславед" --explore
+    python3 collect.py wb "гиславед" --brand Gislaved --subject "Шины зимние"
     python3 collect.py wb "jacobs" --stars 1-3 --period 2025-01..2025-08
     python3 collect.py wb --nm 119396077 148815731 --media photo
-    python3 collect.py --list
 
 Площадка задаёт свои аргументы (что искать), фильтры общие для всех
 (что оставить из собранного). Результат — в out/<площадка>/<запрос>/
@@ -34,25 +34,12 @@ from core.xlsx import write_workbook
 # данные в нём потерялись бы при обновлении.
 OUT_DIR = Path.cwd() / "out"
 
-# Подключённые площадки. Порядок — как в плане работ: сначала то,
-# что собирается стабильно и без браузера.
+# Подключённые площадки. В скилле только Wildberries: остальные либо
+# не проверены на живых данных, либо закрыты антиботом. Их код лежит
+# в репозитории разработки, каталог spare/, и возвращается сюда одной
+# строкой, когда площадка пройдёт приёмку.
 REGISTRY = {
     "wb": "platforms.wb",
-    "uteka": "platforms.uteka",
-    "irecommend": "platforms.irecommend",
-}
-
-# Ещё не написаны — держим список на виду, чтобы --list показывал
-# полную картину, а не только готовое.
-PLANNED = {
-    "lamoda": "тир C — JS-челлендж ServicePipe, переехала в волну 3",
-    "podrygka": "отзывы делегированы виджету Aplaut, своих нет — см. README",
-    "megamarket": "тир B — волна 2",
-    "eapteka": "тир B — волна 2",
-    "otzovik": "тир B — волна 2",
-    "ozon": "тир C — сбор из живого браузера, волна 3",
-    "yandex": "тир C — волна 3",
-    "goldapple": "тир C — Group-IB, волна 3",
 }
 
 
@@ -68,9 +55,6 @@ def show_list() -> int:
             print(f"  {name:<12} тир {m.TIER}  {m.TITLE}")
         except Exception as e:  # модуль сломан — это не должно валить остальное
             print(f"  {name:<12} ошибка импорта: {e}")
-    print("\nВ плане:")
-    for name, note in PLANNED.items():
-        print(f"  {name:<12} {note}")
     return 0
 
 

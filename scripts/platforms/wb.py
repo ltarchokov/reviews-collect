@@ -263,34 +263,69 @@ def explore(args) -> Facets:
             seen.add(p["root"])
             cards.append(p)
 
+    brand = aggregate(cards, "brand", "Бренд", "--brand «название»")
+    notes: list[str] = []
+
+    # Чей это бренд. Либо назван флагом, либо один бренд держит больше
+    # 70% отзывов в выдаче — так бывает, когда запрос и есть имя бренда.
+    # Название берём в написании площадки: пользователь пишет «гиславед»,
+    # а в поле brand стоит «Gislaved», и фильтр по кириллице дал бы ноль.
+    total_rev = sum(v[2] for v in brand.values) or 1
+    top = sorted(brand.values, key=lambda v: -v[2])[:1]
+    brand_share = (top[0][2] / total_rev) if top else 0
+    owner = ""
+    wanted = (getattr(args, "brand", None) or "").lower()
+    if wanted:
+        hit = [p for p in cards if wanted in (p.get("brand") or "").lower()]
+        if hit:
+            owner = hit[0]["brand"]
+        else:
+            have = ", ".join(v[0] for v in sorted(brand.values, key=lambda v: -v[2])[:8])
+            notes.append(
+                f"Бренда «{args.brand}» в поле brand нет. В выдаче: {have}. "
+                "Возможно, другое написание — возьми его из списка."
+            )
+    elif brand_share > 0.7:
+        owner = top[0][0]
+
+    # Категории и продавцы считаются внутри бренда, когда он известен:
+    # иначе по запросу «гиславед» в список категорий попадут шины
+    # соседних брендов из той же выдачи, и выбор будет из чужого.
+    scope = [p for p in cards if (p.get("brand") or "") == owner] if owner else cards
     subj = aggregate(
-        cards, "subjectId", "Подкатегория", "--subject «название»",
+        scope, "subjectId", "Подкатегория", "--subject «название»",
         name_of=lambda i: names.get(int(i), f"предмет {i}"),
     )
-    brand = aggregate(cards, "brand", "Бренд", "--brand «название»")
-    supp = aggregate(cards, "supplier", "Продавец", "--supplier «название»")
+    supp = aggregate(scope, "supplier", "Продавец", "--supplier «название»")
+    subject_named = bool(getattr(args, "subject", None))
 
     # Порядок разрезов и вопрос зависят от того, чего в запросе не хватает.
     # Сбор без бренда и категории — это смесь чужих товаров, а не анализ,
     # поэтому «собрать всё» вариантом не предлагается никогда.
-    total_rev = sum(v[2] for v in brand.values) or 1
-    top = sorted(brand.values, key=lambda v: -v[2])[:1]
-    brand_share = (top[0][2] / total_rev) if top else 0
-    brand_named = bool(getattr(args, "brand", None))
-    subject_named = bool(getattr(args, "subject", None))
-
-    if brand_named or brand_share > 0.7:
-        # Бренд уже определён — запросом или тем, что он один в выдаче.
-        facets = [subj, brand, supp]
-        owner = top[0][0] if top else "бренд"
-        ask = (
-            f"Бренд определён: {owner}. Выбери продуктовую категорию из списка "
-            f"выше — их {len(subj.values)}. Сбор идёт по одной категории за "
-            "прогон, чтобы датасет был про один товар, а не про весь бренд."
-        ) if not subject_named else ""
+    ready = ""
+    if owner:
+        facets = [subj, supp, brand]
+        subj.title = f"Подкатегория (внутри бренда {owner})"
+        if subject_named or len(subj.values) == 1:
+            # Категория одна (у шин это «Шины автомобильные») — вопрос
+            # «какую выбрать» был бы формальностью и тратой хода.
+            only = args.subject if subject_named else subj.values[0][0]
+            ask = ""
+            ready = (
+                f"Бренд {owner}, категория «{only}» — уточнять нечего. "
+                f"Собирай: --brand \"{owner}\" --subject \"{only}\"."
+            )
+        else:
+            ask = (
+                f"Бренд определён: {owner} — так и пиши в --brand. Выбери "
+                f"продуктовую категорию из списка выше — их {len(subj.values)}. "
+                "Сбор идёт по одной категории за прогон, чтобы датасет был про "
+                "один товар, а не про весь бренд."
+            )
     else:
         # Брендов много — сначала выбор бренда, категории потом.
         facets = [brand, subj, supp]
+        ready = ""
         ask = (
             f"В выдаче {len(brand.values)} брендов — выбери, чей ассортимент "
             "нужен. Сбор без бренда смешает чужие товары в один датасет, "
@@ -304,7 +339,8 @@ def explore(args) -> Facets:
         scanned_cards=len(cards),
         facets=facets,
         ask=ask,
-        notes=[
+        ready=ready,
+        notes=notes + [
             f"Разведка смотрит начало выдачи — {pages} стр., {len(cards)} карточек "
             "после схлопывания вариантов, — а не весь каталог: разрезы показывают "
             "структуру запроса, а не полные объёмы площадки.",
