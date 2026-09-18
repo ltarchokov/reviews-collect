@@ -128,7 +128,7 @@ def main() -> int:
     # два разреза одного запроса («свитер» по водолазкам и по джемперам)
     # молча затирают друг друга, и пользователь получает не свои данные.
     parts = [slugify(label)]
-    for flag in ("brand", "subject", "supplier"):
+    for flag in ("brand", "name", "subject", "supplier"):
         val = getattr(args, flag, None)
         slug = slugify(str(val)) if val else ""
         # Бренд часто совпадает с запросом («твое» + --brand твое):

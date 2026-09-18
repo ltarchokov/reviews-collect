@@ -17,6 +17,7 @@ Wildberries — тир A: открытый JSON API, работает без б�
 
 from __future__ import annotations
 
+import difflib
 import json
 import re
 from collections import Counter
@@ -147,7 +148,8 @@ def add_args(ap) -> None:
     ap.add_argument("--url", nargs="+", help="ссылки на товары WB вместо поиска (артикул берётся из ссылки)")
     ap.add_argument("--products", type=int, default=25, help="сколько карточек обработать (по умолчанию 25)")
     ap.add_argument("--pages", type=int, default=1, help="страниц выдачи по 100 товаров (по умолчанию 1)")
-    ap.add_argument("--brand", help="оставить только этот бренд (без учёта регистра)")
+    ap.add_argument("--brand", help="оставить только этот бренд: точное совпадение, если оно есть в выдаче, иначе по вхождению")
+    ap.add_argument("--name", help="оставить карточки, в названии которых есть это слово: сезон, модель, объём («летн», «Powergy»)")
     ap.add_argument("--min-feedbacks", type=int, default=1, help="пропускать карточки с числом отзывов меньше указанного")
 
 
@@ -312,16 +314,16 @@ def explore(args) -> Facets:
     top = sorted(brand.values, key=lambda v: -v[2])[:1]
     brand_share = (top[0][2] / total_rev) if top else 0
     owner = ""
-    wanted = (getattr(args, "brand", None) or "").lower()
+    wanted = (getattr(args, "brand", None) or "").strip()
     if wanted:
-        hit = [p for p in cards if wanted in (p.get("brand") or "").lower()]
-        if hit:
-            owner = hit[0]["brand"]
-        else:
+        owner = resolve_brand(wanted, [p.get("brand") or "" for p in cards]) or ""
+        if owner and owner.lower() != wanted.lower():
+            notes.insert(0, f"Бренд «{wanted}» понят как «{owner}» — так и пиши в --brand.")
+        if not owner:
             have = ", ".join(v[0] for v in sorted(brand.values, key=lambda v: -v[2])[:8])
             notes.append(
-                f"Бренда «{args.brand}» в поле brand нет. В выдаче: {have}. "
-                "Возможно, другое написание — возьми его из списка."
+                f"Бренда, похожего на «{wanted}», в выдаче нет. Есть: {have}. "
+                "Покажи список пользователю и спроси, а не подбирай сам."
             )
     elif brand_share > 0.7:
         owner = top[0][0]
@@ -330,6 +332,9 @@ def explore(args) -> Facets:
     # иначе по запросу «гиславед» в список категорий попадут шины
     # соседних брендов из той же выдачи, и выбор будет из чужого.
     scope = [p for p in cards if (p.get("brand") or "") == owner] if owner else cards
+    if getattr(args, "name", None):
+        nd = args.name.lower()
+        scope = [p for p in scope if nd in (p.get("name") or "").lower()]
     subj = aggregate(
         scope, "subjectId", "Подкатегория", "--subject «название»",
         name_of=lambda i: names.get(int(i), f"предмет {i}"),
@@ -388,6 +393,66 @@ def explore(args) -> Facets:
     )
 
 
+# Кириллица → латиница для сравнения написаний бренда. Не для показа:
+# только чтобы «пирелли» и «Pirelli» свелись к одной строке.
+_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e",
+    "ж": "zh", "з": "z", "и": "i", "й": "i", "к": "k", "л": "l", "м": "m",
+    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
+    "ф": "f", "х": "h", "ц": "c", "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "",
+    "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+}
+
+
+def _key(s: str) -> str:
+    """Нормальная форма названия: нижний регистр, латиница, без знаков
+    и удвоенных букв. Удвоения схлопываются, потому что «пирели» и
+    «пирелли» — одна и та же опечатка в обе стороны."""
+    s = "".join(_TRANSLIT.get(ch, ch) for ch in s.lower())
+    s = re.sub(r"[^a-z0-9]+", "", s)
+    return re.sub(r"(.)\1+", r"\1", s)
+
+
+def resolve_brand(wanted: str, brands: list[str]) -> str | None:
+    """Написание пользователя → бренд из выдачи, в написании площадки.
+
+    Пользователи пишут бренд кириллицей, с опечатками и в другом регистре:
+    «пирели», «Pireli», «PIRELLI». Поиск WB это переживает, а фильтр по
+    полю brand — нет, поэтому здесь свой разбор. Порядок: точное
+    совпадение нормальных форм → бренд, начинающийся с искомого →
+    ближайший по похожести с порогом. Среди нескольких кандидатов
+    берётся самый короткий: «Pirelli», а не «Pirelli Russia».
+    """
+    w = _key(wanted)
+    if not w:
+        return None
+    uniq = list(dict.fromkeys(b for b in brands if b))
+    exact = [b for b in uniq if _key(b) == w]
+    if exact:
+        return min(exact, key=len)
+    prefix = [b for b in uniq if _key(b).startswith(w) or w.startswith(_key(b))]
+    if prefix:
+        return min(prefix, key=len)
+    scored = [(difflib.SequenceMatcher(None, w, _key(b)).ratio(), b) for b in uniq]
+    best = max(scored, default=(0, None))
+    # 0.7, а не выше: «найк» → «naik» против «nike» даёт 0.75, и это
+    # ровно тот случай, ради которого разбор написан. Кандидаты берутся
+    # только из выдачи по запросу, так что ложное срабатывание маловероятно.
+    return best[1] if best[0] >= 0.7 else None
+
+
+def _by_brand(products: list[dict], wanted: str) -> list[dict]:
+    """Сужение по бренду с разбором написания. Подмена всегда видна
+    в логе: молчаливое «пирели → Pirelli» однажды подставит не тот бренд,
+    и никто не узнает."""
+    found = resolve_brand(wanted, [p["brand"] for p in products])
+    if not found:
+        return []
+    if found.lower() != wanted.lower().strip():
+        log(f"бренд «{wanted}» понят как «{found}»")
+    return [p for p in products if p["brand"] == found]
+
+
 def _narrow(products: list[dict], args, names: dict[int, str]) -> list[dict]:
     """Сужение по подкатегории и продавцу — по названию, без учёта регистра."""
     if getattr(args, "subject", None):
@@ -427,9 +492,12 @@ def collect(args) -> tuple[list[dict], list[dict], list[str]]:
     products = [_product(p, label) for p in raw]
 
     if args.brand:
-        needle = args.brand.lower()
-        products = [p for p in products if needle in p["brand"].lower()]
+        products = _by_brand(products, args.brand)
         log(f"фильтр по бренду «{args.brand}»: осталось {len(products)}")
+    if getattr(args, "name", None):
+        needle = args.name.lower()
+        products = [p for p in products if needle in p["product_name"].lower()]
+        log(f"фильтр по названию «{args.name}»: осталось {len(products)}")
 
     if getattr(args, "subject", None) or getattr(args, "supplier", None):
         products = _narrow(products, args, subjects(wb.c))
