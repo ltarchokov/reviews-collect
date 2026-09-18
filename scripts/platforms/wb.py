@@ -18,6 +18,7 @@ Wildberries — тир A: открытый JSON API, работает без б�
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from pathlib import Path
 from urllib.parse import quote
@@ -104,10 +105,46 @@ def subjects(client: Client) -> dict[int, str]:
     return flat
 
 
+# Артикул в ссылках WB. Три формы, которые реально присылают люди:
+#   wildberries.ru/catalog/119396077/detail.aspx
+#   wildberries.ru/catalog/119396077/feedbacks
+#   wildberries.ru/product?card=119396077   (мобильная выдача)
+# Голое число тоже принимается — это уже артикул.
+_NM_IN_URL = re.compile(r"(?:/catalog/|[?&]card=|[?&]nm=)(\d{5,})|^(\d{5,})$")
+
+
+def nm_from_urls(urls: list[str]) -> tuple[list[int], list[str]]:
+    """Ссылки → артикулы. Вторым значением — то, что разобрать не удалось:
+    молча выбросить чужую ссылку значит собрать не те товары."""
+    ids: list[int] = []
+    bad: list[str] = []
+    for u in urls:
+        m = _NM_IN_URL.search(u.strip())
+        nm = int(m.group(1) or m.group(2)) if m else 0
+        if nm and nm not in ids:
+            ids.append(nm)
+        elif not nm:
+            bad.append(u)
+    return ids, bad
+
+
+def resolve(args) -> None:
+    """Сводит --url к --nm до всего остального: дальше инструмент знает
+    только артикулы, и режимы «по ссылкам» и «по артикулам» не расходятся."""
+    urls = getattr(args, "url", None) or []
+    if not urls:
+        return
+    ids, bad = nm_from_urls(urls)
+    for u in bad:
+        log(f"не нашёл артикул в ссылке: {u}")
+    args.nm = list(dict.fromkeys((args.nm or []) + ids))
+
+
 def add_args(ap) -> None:
     ap.add_argument("--subject", help="сузить до подкатегории по названию (см. explore)")
     ap.add_argument("--supplier", help="сузить до продавца по названию")
     ap.add_argument("--nm", nargs="+", type=int, help="конкретные артикулы вместо поиска")
+    ap.add_argument("--url", nargs="+", help="ссылки на товары WB вместо поиска (артикул берётся из ссылки)")
     ap.add_argument("--products", type=int, default=25, help="сколько карточек обработать (по умолчанию 25)")
     ap.add_argument("--pages", type=int, default=1, help="страниц выдачи по 100 товаров (по умолчанию 1)")
     ap.add_argument("--brand", help="оставить только этот бренд (без учёта регистра)")
@@ -156,7 +193,8 @@ class WB:
     def cards(self, nm_ids: list[int]) -> list[dict]:
         out: list[dict] = []
         for i in range(0, len(nm_ids), 50):
-            chunk = ",".join(str(n) for n in nm_ids[i : i + 50])
+            # Разделитель «;»: с сентября 2026 запятая в nm даёт 400.
+            chunk = ";".join(str(n) for n in nm_ids[i : i + 50])
             data = self.c.json(f"{CARD_URL}?appType=1&curr=rub&dest={DEST}&nm={chunk}")
             if data:
                 out.extend(data.get("products") or [])

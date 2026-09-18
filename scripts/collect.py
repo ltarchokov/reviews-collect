@@ -6,6 +6,7 @@
     python3 collect.py wb "<запрос>" --brand "<бренд>" --subject "<категория>"
     python3 collect.py wb "<запрос>" --stars 1-3 --period 2025-01..2025-08
     python3 collect.py wb --nm <артикул> <артикул> --media photo
+    python3 collect.py wb --url https://www.wildberries.ru/catalog/<артикул>/detail.aspx
 
 Площадка задаёт свои аргументы (что искать), фильтры общие для всех
 (что оставить из собранного). Результат — в out/<площадка>/<запрос>/
@@ -97,9 +98,20 @@ def main() -> int:
         return show_list()
 
     m = load(args.platform)
-    label = args.query or getattr(args, "nm", None) and f"nm-{args.nm[0]}" or ""
+    # Ссылки на товары сводятся к артикулам до всего остального.
+    if hasattr(m, "resolve"):
+        m.resolve(args)
+    nm = getattr(args, "nm", None) or []
+    if args.query:
+        label = args.query
+    elif len(nm) == 1:
+        label = f"nm-{nm[0]}"
+    elif nm:
+        label = f"nm-{nm[0]}-и-ещё-{len(nm) - 1}"
+    else:
+        label = ""
     if not label:
-        ap.error("нужен запрос или идентификаторы товаров")
+        ap.error("нужен запрос, артикулы (--nm) или ссылки на товары (--url)")
 
     if getattr(args, "explore", False):
         if not hasattr(m, "explore"):

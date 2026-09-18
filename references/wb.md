@@ -8,6 +8,7 @@
 collect wb "кофе jacobs"
 collect wb "jacobs" --brand jacobs --products 40 --pages 2
 collect wb --nm 119396077 148815731
+collect wb --url https://www.wildberries.ru/catalog/119396077/detail.aspx
 collect wb "сыворотка витамин с" --stars 1-3 --media photo
 ```
 
@@ -79,7 +80,11 @@ WB отдаёт максимум ~1000 последних отзывов на к
 в DevTools на wildberries.ru, вкладка Network, фильтр `search`.
 
 Эндпоинты отзывов (`feedbacks1/2.wb.ru`) и карточек (`card.wb.ru`)
-защиты не имеют и стабильны.
+защиты не имеют и стабильны. Одно изменение замечено в сентябре 2026:
+`card.wb.ru` перестал принимать список артикулов через запятую (400),
+работает разделитель `;` — так и сделано в `cards()`. Симптом возврата
+проблемы: `--nm`/`--url` дают «ничего не найдено» при одном запросе
+и 100% отбитых.
 
 ## Полезное в данных
 
